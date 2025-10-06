@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Trash2, FileDown } from "lucide-react";
+import { Plus, Trash2, FileDown, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import colcalLogo from "@/assets/colcal-logo.webp";
 import jsPDF from "jspdf";
@@ -33,6 +33,7 @@ interface SalesRepInfo {
   position: string;
   phone: string;
   email: string;
+  signature: string;
 }
 
 const QuotationForm = () => {
@@ -55,6 +56,7 @@ const QuotationForm = () => {
     position: "Sales Engineer",
     phone: "",
     email: "",
+    signature: "",
   });
 
   const [projectTitle, setProjectTitle] = useState("");
@@ -122,6 +124,32 @@ const QuotationForm = () => {
     }).format(amount);
   };
 
+  const handleImageUpload = (file: File, callback: (dataUrl: string) => void) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      callback(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleProductImageUpload = (productId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleImageUpload(file, (dataUrl) => {
+        updateProduct(productId, "image", dataUrl);
+      });
+    }
+  };
+
+  const handleSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleImageUpload(file, (dataUrl) => {
+        setSalesRepInfo({ ...salesRepInfo, signature: dataUrl });
+      });
+    }
+  };
+
   const generatePDF = async () => {
     try {
       const element = document.getElementById("quotation-preview");
@@ -136,14 +164,31 @@ const QuotationForm = () => {
         scale: 2,
         useCORS: true,
         logging: false,
+        allowTaint: true,
       });
 
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF("p", "mm", "a4");
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pdfWidth;
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
 
-      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      // Add first page
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      // Add additional pages if content is longer than one page
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
       pdf.save(`Colcal_Quotation_${quotationNumber}.pdf`);
 
       toast({
@@ -324,6 +369,24 @@ const QuotationForm = () => {
                             rows={3}
                           />
                         </div>
+                        <div className="md:col-span-2">
+                          <Label>Product Image</Label>
+                          <div className="flex items-center gap-3">
+                            <Input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => handleProductImageUpload(product.id, e)}
+                              className="flex-1"
+                            />
+                            {product.image && (
+                              <img
+                                src={product.image}
+                                alt="Product preview"
+                                className="h-12 w-12 object-cover rounded border"
+                              />
+                            )}
+                          </div>
+                        </div>
                         <div>
                           <Label>Unit Price (KES)</Label>
                           <Input
@@ -425,6 +488,25 @@ const QuotationForm = () => {
                     }
                     placeholder="rep@colcalmachinery.co.ke"
                   />
+                </div>
+                <div className="md:col-span-2">
+                  <Label htmlFor="repSignature">E-Signature</Label>
+                  <div className="flex items-center gap-3">
+                    <Input
+                      id="repSignature"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleSignatureUpload}
+                      className="flex-1"
+                    />
+                    {salesRepInfo.signature && (
+                      <img
+                        src={salesRepInfo.signature}
+                        alt="Signature preview"
+                        className="h-12 w-24 object-contain rounded border bg-white"
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -562,8 +644,19 @@ const QuotationForm = () => {
                       <td className="border border-border p-3 text-foreground">
                         {index + 1}
                       </td>
-                      <td className="border border-border p-3 font-medium text-foreground">
-                        {product.name || "[Product Name]"}
+                      <td className="border border-border p-3">
+                        <div className="flex items-center gap-3">
+                          {product.image && (
+                            <img
+                              src={product.image}
+                              alt={product.name}
+                              className="h-12 w-12 object-cover rounded border"
+                            />
+                          )}
+                          <span className="font-medium text-foreground">
+                            {product.name || "[Product Name]"}
+                          </span>
+                        </div>
                       </td>
                       <td className="border border-border p-3 text-muted-foreground text-xs">
                         {product.description || "[Description]"}
@@ -720,7 +813,17 @@ const QuotationForm = () => {
               </div>
               <div className="mt-6 pt-4 border-t border-border">
                 <p className="text-sm text-muted-foreground mb-2">Authorized Signature:</p>
-                <div className="h-16 border-b-2 border-foreground/20 w-64"></div>
+                {salesRepInfo.signature ? (
+                  <div className="w-64">
+                    <img
+                      src={salesRepInfo.signature}
+                      alt="Signature"
+                      className="max-h-16 object-contain"
+                    />
+                  </div>
+                ) : (
+                  <div className="h-16 border-b-2 border-foreground/20 w-64"></div>
+                )}
                 <p className="text-xs text-muted-foreground mt-1">
                   Date: {date}
                 </p>
