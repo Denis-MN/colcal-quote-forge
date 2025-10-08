@@ -787,6 +787,9 @@ const QuotationForm = () => {
                 <div>
                   <p className="font-bold text-foreground mb-3">BANKING DETAILS</p>
                   <p className="text-muted-foreground mb-1">
+                    <span className="font-semibold">Bank Name:</span> Co-operative Bank of Kenya
+                  </p>
+                  <p className="text-muted-foreground mb-1">
                     <span className="font-semibold">Account Name:</span> COLCAL MACHINERY AND EQUIPMENT COMPANY
                   </p>
                   <p className="text-muted-foreground mb-1">
