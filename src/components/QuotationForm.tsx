@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Trash2, FileDown, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import colcalLogo from "@/assets/colcal-logo.webp";
@@ -76,6 +77,7 @@ const QuotationForm = () => {
   ]);
 
   const [installationCost, setInstallationCost] = useState(0);
+  const [includeTax, setIncludeTax] = useState(false);
   const vatRate = 0.16;
 
   const addProduct = () => {
@@ -109,7 +111,9 @@ const QuotationForm = () => {
   };
 
   const calculateVAT = () => {
-    return (calculateSubtotal() + installationCost) * vatRate;
+    if (!includeTax) return 0;
+    // VAT only applies to products (subtotal), not installation
+    return calculateSubtotal() * vatRate;
   };
 
   const calculateTotal = () => {
@@ -423,18 +427,33 @@ const QuotationForm = () => {
             {/* Installation Cost */}
             <div>
               <h3 className="text-lg font-semibold mb-4 text-foreground">Additional Costs</h3>
-              <div className="max-w-md">
-                <Label htmlFor="installation">Installation Cost (KES)</Label>
-                <Input
-                  id="installation"
-                  type="number"
-                  min="0"
-                  value={installationCost}
-                  onChange={(e) =>
-                    setInstallationCost(parseFloat(e.target.value) || 0)
-                  }
-                  placeholder="0"
-                />
+              <div className="max-w-md space-y-4">
+                <div>
+                  <Label htmlFor="installation">Installation Cost (KES)</Label>
+                  <Input
+                    id="installation"
+                    type="number"
+                    min="0"
+                    value={installationCost}
+                    onChange={(e) =>
+                      setInstallationCost(parseFloat(e.target.value) || 0)
+                    }
+                    placeholder="0"
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="includeTax"
+                    checked={includeTax}
+                    onCheckedChange={(checked) => setIncludeTax(checked as boolean)}
+                  />
+                  <Label
+                    htmlFor="includeTax"
+                    className="text-sm font-normal cursor-pointer"
+                  >
+                    Include VAT (16%) - applied to products only, not installation
+                  </Label>
+                </div>
               </div>
             </div>
 
@@ -693,12 +712,14 @@ const QuotationForm = () => {
                         KES {formatCurrency(installationCost)}
                       </td>
                     </tr>
-                    <tr className="border-b border-border">
-                      <td className="py-2 text-muted-foreground">VAT (16%):</td>
-                      <td className="py-2 text-right font-semibold text-foreground">
-                        KES {formatCurrency(calculateVAT())}
-                      </td>
-                    </tr>
+                    {includeTax && (
+                      <tr className="border-b border-border">
+                        <td className="py-2 text-muted-foreground">VAT (16%):</td>
+                        <td className="py-2 text-right font-semibold text-foreground">
+                          KES {formatCurrency(calculateVAT())}
+                        </td>
+                      </tr>
+                    )}
                     <tr className="bg-primary/10">
                       <td className="py-3 text-lg font-bold text-primary">
                         Total Payable:
@@ -755,26 +776,30 @@ const QuotationForm = () => {
               <h3 className="text-lg font-bold text-primary mb-4">Payment Details</h3>
               <div className="grid md:grid-cols-2 gap-6 p-6 bg-muted/50 rounded-lg text-sm">
                 <div>
-                  <p className="font-bold text-foreground mb-2">M-Pesa Paybill:</p>
-                  <p className="text-muted-foreground">
-                    <span className="font-semibold">Paybill:</span> 400200
+                  <p className="font-bold text-foreground mb-3">LIPA NA MPESA</p>
+                  <p className="text-muted-foreground mb-1">
+                    <span className="font-semibold">Business Number:</span> 400200
                   </p>
                   <p className="text-muted-foreground">
-                    <span className="font-semibold">Account:</span> 01101384733002
-                  </p>
-                  <p className="text-muted-foreground">
-                    <span className="font-semibold">Name:</span> Colcal Machinery and
-                    Equipment Company
+                    <span className="font-semibold">Account Number:</span> 889545
                   </p>
                 </div>
                 <div>
-                  <p className="font-bold text-foreground mb-2">Bank Transfer:</p>
-                  <p className="text-muted-foreground">
-                    <span className="font-semibold">Account:</span> 889545
+                  <p className="font-bold text-foreground mb-3">BANKING DETAILS</p>
+                  <p className="text-muted-foreground mb-1">
+                    <span className="font-semibold">Account Name:</span> Colcal Machinery & Equipment Company
+                  </p>
+                  <p className="text-muted-foreground mb-1">
+                    <span className="font-semibold">Account Number:</span> 01101384733002
+                  </p>
+                  <p className="text-muted-foreground mb-1">
+                    <span className="font-semibold">SWIFT Code:</span> KCOOKENA
+                  </p>
+                  <p className="text-muted-foreground mb-1">
+                    <span className="font-semibold">Bank Code:</span> 11000
                   </p>
                   <p className="text-muted-foreground">
-                    <span className="font-semibold">Account Name:</span> Colcal Machinery
-                    and Equipment Company
+                    <span className="font-semibold">Branch Code:</span> 11135 (Tom Mboya branch)
                   </p>
                 </div>
               </div>
