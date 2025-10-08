@@ -858,8 +858,7 @@ const QuotationForm = () => {
             {/* Footer */}
             <div className="pt-6 border-t-2 border-primary text-center">
               <p className="text-sm font-semibold text-primary mb-2">
-                For reliable solar, generator, and machinery solutions — trust Colcal
-                Machinery
+                For reliable solar, generator, and machinery solutions — trust Colcal Machinery
               </p>
               <p className="text-xs text-muted-foreground">
                 Delivering power across Kenya & East Africa
