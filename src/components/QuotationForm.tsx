@@ -164,12 +164,31 @@ const QuotationForm = () => {
         description: "Please wait while we prepare your quotation.",
       });
 
+      // Store original styles
+      const originalWidth = element.style.width;
+      const originalMinWidth = element.style.minWidth;
+      const originalMaxWidth = element.style.maxWidth;
+
+      // Set fixed width for PDF generation to ensure proper rendering on mobile
+      element.style.width = "1024px";
+      element.style.minWidth = "1024px";
+      element.style.maxWidth = "1024px";
+
+      // Wait for layout to stabilize
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
         logging: false,
         allowTaint: true,
+        width: 1024,
       });
+
+      // Restore original styles
+      element.style.width = originalWidth;
+      element.style.minWidth = originalMinWidth;
+      element.style.maxWidth = originalMaxWidth;
 
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF("p", "mm", "a4");
@@ -205,6 +224,14 @@ const QuotationForm = () => {
         description: "Failed to generate PDF. Please try again.",
         variant: "destructive",
       });
+      
+      // Ensure styles are restored even if there's an error
+      const element = document.getElementById("quotation-preview");
+      if (element) {
+        element.style.width = "";
+        element.style.minWidth = "";
+        element.style.maxWidth = "";
+      }
     }
   };
 
