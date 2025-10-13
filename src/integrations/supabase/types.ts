@@ -14,13 +14,63 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      quotations: {
+        Row: {
+          created_at: string
+          customer_info: Json
+          date: string
+          id: string
+          include_tax: boolean
+          installation_cost: number
+          intro_text: string
+          products: Json
+          project_title: string
+          quotation_number: string
+          sales_rep_info: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          customer_info?: Json
+          date: string
+          id?: string
+          include_tax?: boolean
+          installation_cost?: number
+          intro_text?: string
+          products?: Json
+          project_title?: string
+          quotation_number: string
+          sales_rep_info?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          customer_info?: Json
+          date?: string
+          id?: string
+          include_tax?: boolean
+          installation_cost?: number
+          intro_text?: string
+          products?: Json
+          project_title?: string
+          quotation_number?: string
+          sales_rep_info?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      delete_old_quotations: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

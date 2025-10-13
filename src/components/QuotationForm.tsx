@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,11 +7,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Trash2, FileDown, Upload } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Plus, Trash2, FileDown, Upload, LogOut, Edit, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import colcalLogo from "@/assets/colcal-logo.webp";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import { supabase } from "@/integrations/supabase/client";
+import type { User } from "@supabase/supabase-js";
 
 interface Product {
   id: string;
@@ -37,8 +41,28 @@ interface SalesRepInfo {
   signature: string;
 }
 
+interface SavedQuotation {
+  id: string;
+  quotation_number: string;
+  date: string;
+  customer_info: CustomerInfo;
+  sales_rep_info: SalesRepInfo;
+  project_title: string;
+  intro_text: string;
+  products: Product[];
+  installation_cost: number;
+  include_tax: boolean;
+  created_at: string;
+}
+
 const QuotationForm = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("create");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [savedQuotations, setSavedQuotations] = useState<SavedQuotation[]>([]);
   const [quotationNumber] = useState(
     `COL/GEN/${new Date().getFullYear()}/${String(Math.floor(Math.random() * 9999) + 1).padStart(4, "0")}`
   );
@@ -76,9 +100,186 @@ const QuotationForm = () => {
     },
   ]);
 
+  
   const [installationCost, setInstallationCost] = useState(0);
   const [includeTax, setIncludeTax] = useState(false);
   const vatRate = 0.16;
+
+  // Check authentication
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        navigate("/auth");
+        return;
+      }
+      setUser(session.user);
+      setLoading(false);
+    };
+    checkUser();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!session) {
+        navigate("/auth");
+      } else {
+        setUser(session.user);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
+
+  // Load saved quotations
+  useEffect(() => {
+    if (user && activeTab === "saved") {
+      loadSavedQuotations();
+    }
+  }, [user, activeTab]);
+
+  const loadSavedQuotations = async () => {
+    if (!user) return;
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const { data, error } = await supabase
+      .from("quotations")
+      .select("*")
+      .gte("created_at", thirtyDaysAgo.toISOString())
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load saved quotations.",
+        variant: "destructive",
+      });
+    } else {
+      // Cast Json types to proper types
+      const quotations = (data || []).map(q => ({
+        ...q,
+        customer_info: q.customer_info as unknown as CustomerInfo,
+        sales_rep_info: q.sales_rep_info as unknown as SalesRepInfo,
+        products: q.products as unknown as Product[],
+      }));
+      setSavedQuotations(quotations);
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/auth");
+  };
+
+  const saveQuotation = async () => {
+    if (!user) return;
+
+    const quotationData = {
+      user_id: user.id,
+      quotation_number: quotationNumber,
+      date,
+      customer_info: customerInfo as any,
+      sales_rep_info: salesRepInfo as any,
+      project_title: projectTitle,
+      intro_text: introText,
+      products: products as any,
+      installation_cost: installationCost,
+      include_tax: includeTax,
+    };
+
+    if (editingId) {
+      // Update existing quotation
+      const { error } = await supabase
+        .from("quotations")
+        .update(quotationData)
+        .eq("id", editingId);
+
+      if (error) {
+        toast({
+          title: "Error",
+          description: "Failed to update quotation.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Success!",
+          description: "Quotation updated successfully.",
+        });
+        setEditingId(null);
+        setActiveTab("saved");
+        loadSavedQuotations();
+      }
+    } else {
+      // Create new quotation
+      const { error } = await supabase
+        .from("quotations")
+        .insert([quotationData]);
+
+      if (error) {
+        toast({
+          title: "Error",
+          description: "Failed to save quotation.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Success!",
+          description: "Quotation saved successfully.",
+        });
+        setActiveTab("saved");
+        loadSavedQuotations();
+      }
+    }
+  };
+
+  const loadQuotation = (quotation: SavedQuotation) => {
+    setEditingId(quotation.id);
+    setCustomerInfo(quotation.customer_info);
+    setSalesRepInfo(quotation.sales_rep_info);
+    setProjectTitle(quotation.project_title);
+    setIntroText(quotation.intro_text);
+    setProducts(quotation.products);
+    setInstallationCost(Number(quotation.installation_cost));
+    setIncludeTax(quotation.include_tax);
+    setActiveTab("create");
+    
+    toast({
+      title: "Quotation Loaded",
+      description: "You can now edit this quotation.",
+    });
+  };
+
+  const deleteQuotation = async (id: string) => {
+    const { error } = await supabase
+      .from("quotations")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete quotation.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Deleted",
+        description: "Quotation deleted successfully.",
+      });
+      loadSavedQuotations();
+    }
+  };
+
+  const resetForm = () => {
+    setEditingId(null);
+    setCustomerInfo({ name: "", company: "", location: "", phone: "", email: "" });
+    setSalesRepInfo({ name: "", position: "Sales Engineer", phone: "", email: "", signature: "" });
+    setProjectTitle("");
+    setIntroText("Thank you for choosing Colcal Machinery. Below is our quotation for the requested system. We guarantee reliable equipment, professional installation, and full after-sales support across Kenya and East Africa.");
+    setProducts([{ id: "1", name: "", description: "", image: "", quantity: 1, unitPrice: 0 }]);
+    setInstallationCost(0);
+    setIncludeTax(false);
+  };
 
   const addProduct = () => {
     setProducts([
@@ -235,10 +436,37 @@ const QuotationForm = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
+        <p>Loading...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-muted/30 py-8">
       <div className="container max-w-6xl mx-auto px-4">
-        {/* Form Section */}
+        {/* Header with Logout */}
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold">Colcal Quotation System</h1>
+          <Button variant="outline" onClick={handleLogout}>
+            <LogOut className="h-4 w-4 mr-2" />
+            Logout
+          </Button>
+        </div>
+
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-2 mb-8">
+            <TabsTrigger value="create">
+              {editingId ? "Edit Quotation" : "Create New"}
+            </TabsTrigger>
+            <TabsTrigger value="saved">Saved Quotations (Last 30 Days)</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="create">
+            {/* Form Section */}
         <Card className="mb-8 shadow-lg">
           <CardHeader className="bg-gradient-to-r from-primary to-secondary text-primary-foreground">
             <CardTitle className="text-2xl">Create New Quotation</CardTitle>
@@ -557,10 +785,19 @@ const QuotationForm = () => {
               </div>
             </div>
 
-            <div className="flex justify-end pt-4">
+            <div className="flex gap-4 justify-end pt-4">
+              {editingId && (
+                <Button onClick={resetForm} size="lg" variant="outline" className="gap-2">
+                  Cancel Edit
+                </Button>
+              )}
+              <Button onClick={saveQuotation} size="lg" variant="secondary" className="gap-2">
+                <Save className="h-5 w-5" />
+                {editingId ? "Update Quotation" : "Save Quotation"}
+              </Button>
               <Button onClick={generatePDF} size="lg" className="gap-2">
                 <FileDown className="h-5 w-5" />
-                Generate PDF Quotation
+                Generate PDF
               </Button>
             </div>
           </CardContent>
@@ -903,6 +1140,82 @@ const QuotationForm = () => {
             </div>
           </CardContent>
         </Card>
+          </TabsContent>
+
+          <TabsContent value="saved">
+            <Card>
+              <CardHeader>
+                <CardTitle>Saved Quotations (Last 30 Days)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {savedQuotations.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">
+                    No saved quotations found.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {savedQuotations.map((quotation) => (
+                      <Card key={quotation.id} className="hover:shadow-md transition-shadow">
+                        <CardContent className="pt-6">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <h3 className="font-semibold text-lg text-foreground mb-2">
+                                {quotation.project_title || "Untitled Quotation"}
+                              </h3>
+                              <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+                                <p>
+                                  <span className="font-medium">Number:</span> {quotation.quotation_number}
+                                </p>
+                                <p>
+                                  <span className="font-medium">Date:</span> {quotation.date}
+                                </p>
+                                <p>
+                                  <span className="font-medium">Customer:</span> {quotation.customer_info.name}
+                                </p>
+                                <p>
+                                  <span className="font-medium">Company:</span> {quotation.customer_info.company}
+                                </p>
+                                <p>
+                                  <span className="font-medium">Total:</span> KES{" "}
+                                  {formatCurrency(
+                                    quotation.products.reduce((sum, p) => sum + p.quantity * p.unitPrice, 0) +
+                                    Number(quotation.installation_cost) +
+                                    (quotation.include_tax ? quotation.products.reduce((sum, p) => sum + p.quantity * p.unitPrice, 0) * 0.16 : 0)
+                                  )}
+                                </p>
+                                <p>
+                                  <span className="font-medium">Created:</span>{" "}
+                                  {new Date(quotation.created_at).toLocaleDateString()}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex gap-2 ml-4">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => loadQuotation(quotation)}
+                              >
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => deleteQuotation(quotation.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
