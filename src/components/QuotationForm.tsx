@@ -475,12 +475,12 @@ const QuotationForm = () => {
   }
 
   return (
-    <div className="min-h-screen bg-muted/30 py-8">
-      <div className="container max-w-6xl mx-auto px-4">
+    <div className="min-h-screen bg-muted/30 py-4 sm:py-8">
+      <div className="container max-w-6xl mx-auto px-3 sm:px-4">
         {/* Header with Logout */}
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">Colcal Quotation System</h1>
-          <Button variant="outline" onClick={handleLogout}>
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">
+          <h1 className="text-2xl sm:text-3xl font-bold">Colcal Quotation System</h1>
+          <Button variant="outline" onClick={handleLogout} className="w-full sm:w-auto">
             <LogOut className="h-4 w-4 mr-2" />
             Logout
           </Button>
@@ -488,20 +488,23 @@ const QuotationForm = () => {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-2 mb-8">
-            <TabsTrigger value="create">
+          <TabsList className="grid w-full grid-cols-2 mb-6 sm:mb-8 h-auto">
+            <TabsTrigger value="create" className="text-xs sm:text-sm whitespace-normal py-2">
               {editingId ? "Edit Quotation" : "Create New"}
             </TabsTrigger>
-            <TabsTrigger value="saved">Saved Quotations (Last 30 Days)</TabsTrigger>
+            <TabsTrigger value="saved" className="text-xs sm:text-sm whitespace-normal py-2">
+              <span className="sm:hidden">Saved</span>
+              <span className="hidden sm:inline">Saved Quotations (Last 30 Days)</span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="create">
             {/* Form Section */}
         <Card className="mb-8 shadow-lg">
-          <CardHeader className="bg-gradient-to-r from-primary to-secondary text-primary-foreground">
-            <CardTitle className="text-2xl">Create New Quotation</CardTitle>
+          <CardHeader className="bg-gradient-to-r from-primary to-secondary text-primary-foreground p-4 sm:p-6">
+            <CardTitle className="text-xl sm:text-2xl">Create New Quotation</CardTitle>
           </CardHeader>
-          <CardContent className="pt-6 space-y-8">
+          <CardContent className="pt-6 px-4 sm:px-6 space-y-6 sm:space-y-8">
             {/* Customer Information */}
             <div>
               <h3 className="text-lg font-semibold mb-4 text-foreground">Customer Information</h3>
@@ -664,7 +667,7 @@ const QuotationForm = () => {
                         </div>
                         <div className="md:col-span-2">
                           <Label>Product Image</Label>
-                          <div className="flex items-center gap-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                             <Input
                               type="file"
                               accept="image/*"
@@ -675,7 +678,7 @@ const QuotationForm = () => {
                               <img
                                 src={product.image}
                                 alt="Product preview"
-                                className="h-12 w-12 object-cover rounded border"
+                                className="h-16 w-16 sm:h-12 sm:w-12 object-cover rounded border"
                               />
                             )}
                           </div>
@@ -819,17 +822,17 @@ const QuotationForm = () => {
               </div>
             </div>
 
-            <div className="flex gap-4 justify-end pt-4">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:justify-end pt-4">
               {editingId && (
-                <Button onClick={resetForm} size="lg" variant="outline" className="gap-2">
+                <Button onClick={resetForm} size="lg" variant="outline" className="gap-2 w-full sm:w-auto">
                   Cancel Edit
                 </Button>
               )}
-              <Button onClick={saveQuotation} size="lg" variant="secondary" className="gap-2">
+              <Button onClick={saveQuotation} size="lg" variant="secondary" className="gap-2 w-full sm:w-auto">
                 <Save className="h-5 w-5" />
                 {editingId ? "Update Quotation" : "Save Quotation"}
               </Button>
-              <Button onClick={generatePDF} size="lg" className="gap-2">
+              <Button onClick={generatePDF} size="lg" className="gap-2 w-full sm:w-auto">
                 <FileDown className="h-5 w-5" />
                 Generate PDF
               </Button>
@@ -839,7 +842,7 @@ const QuotationForm = () => {
 
         {/* Preview Section */}
         <Card id="quotation-preview" className="bg-white shadow-xl">
-          <CardContent className="p-8 md:p-12">
+          <CardContent className="p-4 sm:p-8 md:p-12">
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start mb-8 pb-6 border-b-2 border-primary">
               <div className="mb-4 md:mb-0">
@@ -939,18 +942,18 @@ const QuotationForm = () => {
             </div>
 
             {/* Products Table */}
-            <div className="mb-8 overflow-x-auto">
-              <table className="w-full border-collapse text-sm">
+            <div className="mb-8 -mx-4 sm:mx-0 overflow-x-auto">
+              <table className="w-full min-w-[640px] border-collapse text-sm">
                 <thead>
                   <tr className="bg-primary text-primary-foreground">
-                    <th className="border border-primary p-3 text-left">#</th>
-                    <th className="border border-primary p-3 text-left">Product</th>
-                    <th className="border border-primary p-3 text-left">Description</th>
-                    <th className="border border-primary p-3 text-center">Qty</th>
-                    <th className="border border-primary p-3 text-right">
+                    <th className="border border-primary p-2 sm:p-3 text-left">#</th>
+                    <th className="border border-primary p-2 sm:p-3 text-left">Product</th>
+                    <th className="border border-primary p-2 sm:p-3 text-left">Description</th>
+                    <th className="border border-primary p-2 sm:p-3 text-center">Qty</th>
+                    <th className="border border-primary p-2 sm:p-3 text-right">
                       Unit Price (KES)
                     </th>
-                    <th className="border border-primary p-3 text-right">
+                    <th className="border border-primary p-2 sm:p-3 text-right">
                       Total (KES)
                     </th>
                   </tr>
@@ -958,10 +961,10 @@ const QuotationForm = () => {
                 <tbody>
                   {products.map((product, index) => (
                     <tr key={product.id} className="hover:bg-muted/30">
-                      <td className="border border-border p-3 text-foreground">
+                      <td className="border border-border p-2 sm:p-3 text-foreground">
                         {index + 1}
                       </td>
-                      <td className="border border-border p-3">
+                      <td className="border border-border p-2 sm:p-3">
                         <div className="flex items-center gap-3">
                           {product.image && (
                             <img
@@ -975,16 +978,16 @@ const QuotationForm = () => {
                           </span>
                         </div>
                       </td>
-                      <td className="border border-border p-3 text-muted-foreground text-xs">
+                      <td className="border border-border p-2 sm:p-3 text-muted-foreground text-xs">
                         {product.description || "[Description]"}
                       </td>
-                      <td className="border border-border p-3 text-center text-foreground">
+                      <td className="border border-border p-2 sm:p-3 text-center text-foreground">
                         {product.quantity}
                       </td>
-                      <td className="border border-border p-3 text-right text-foreground">
+                      <td className="border border-border p-2 sm:p-3 text-right text-foreground">
                         {formatCurrency(product.unitPrice)}
                       </td>
-                      <td className="border border-border p-3 text-right font-semibold text-foreground">
+                      <td className="border border-border p-2 sm:p-3 text-right font-semibold text-foreground">
                         {formatCurrency(product.quantity * product.unitPrice)}
                       </td>
                     </tr>
@@ -1191,12 +1194,12 @@ const QuotationForm = () => {
                     {savedQuotations.map((quotation) => (
                       <Card key={quotation.id} className="hover:shadow-md transition-shadow">
                         <CardContent className="pt-6">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <h3 className="font-semibold text-lg text-foreground mb-2">
+                          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-semibold text-lg text-foreground mb-2 break-words">
                                 {quotation.project_title || "Untitled Quotation"}
                               </h3>
-                              <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-muted-foreground">
                                 <p>
                                   <span className="font-medium">Number:</span> {quotation.quotation_number}
                                 </p>
@@ -1223,11 +1226,12 @@ const QuotationForm = () => {
                                 </p>
                               </div>
                             </div>
-                            <div className="flex gap-2 ml-4">
+                            <div className="flex gap-2 sm:ml-4">
                               <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => loadQuotation(quotation)}
+                                className="flex-1 sm:flex-none"
                               >
                                 <Edit className="h-4 w-4 mr-2" />
                                 Edit
