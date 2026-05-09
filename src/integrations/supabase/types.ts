@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      products: {
+        Row: {
+          active: boolean
+          created_at: string
+          description: string | null
+          id: string
+          image_url: string | null
+          last_synced_at: string
+          name: string
+          permalink: string | null
+          price: number | null
+          short_description: string | null
+          sku: string | null
+          updated_at: string
+          wc_id: number
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          last_synced_at?: string
+          name: string
+          permalink?: string | null
+          price?: number | null
+          short_description?: string | null
+          sku?: string | null
+          updated_at?: string
+          wc_id: number
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          last_synced_at?: string
+          name?: string
+          permalink?: string | null
+          price?: number | null
+          short_description?: string | null
+          sku?: string | null
+          updated_at?: string
+          wc_id?: number
+        }
+        Relationships: []
+      }
       quotations: {
         Row: {
           created_at: string
