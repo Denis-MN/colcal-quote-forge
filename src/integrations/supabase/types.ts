@@ -67,10 +67,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      delete_old_quotations: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      delete_old_quotations: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
