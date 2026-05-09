@@ -338,13 +338,42 @@ const QuotationForm = () => {
     reader.readAsDataURL(file);
   };
 
-  const handleProductImageUpload = (productId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProductImageUpload = async (productId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      handleImageUpload(file, (dataUrl) => {
-        updateProduct(productId, "image", dataUrl);
+    if (!file || !user) return;
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error } = await supabase.storage.from("quote-images").upload(path, file, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: file.type,
       });
+      if (error) throw error;
+      const { data } = supabase.storage.from("quote-images").getPublicUrl(path);
+      updateProduct(productId, "image", data.publicUrl);
+    } catch (err: any) {
+      // fallback to data URL if storage upload fails
+      handleImageUpload(file, (dataUrl) => updateProduct(productId, "image", dataUrl));
+      toast({ title: "Image stored locally", description: err?.message ?? "Upload fallback used" });
     }
+  };
+
+  const addProductFromCatalog = (p: CatalogProduct) => {
+    setProducts((prev) => {
+      const isFirstEmpty =
+        prev.length === 1 && !prev[0].name && !prev[0].description && !prev[0].image && prev[0].unitPrice === 0;
+      const newItem: Product = {
+        id: Date.now().toString(),
+        name: p.name,
+        description: p.short_description || p.description || "",
+        image: p.image_url || "",
+        quantity: 1,
+        unitPrice: Number(p.price) || 0,
+      };
+      return isFirstEmpty ? [newItem] : [...prev, newItem];
+    });
+    toast({ title: "Product added", description: p.name });
   };
 
   const handleSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
