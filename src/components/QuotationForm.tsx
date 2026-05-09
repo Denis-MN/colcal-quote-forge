@@ -15,6 +15,7 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
+import ProductSearch, { type CatalogProduct } from "./ProductSearch";
 
 interface Product {
   id: string;
