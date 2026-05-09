@@ -600,8 +600,12 @@ const QuotationForm = () => {
                 <h3 className="text-lg font-semibold text-foreground">Products/Systems</h3>
                 <Button onClick={addProduct} size="sm" variant="secondary">
                   <Plus className="h-4 w-4 mr-2" />
-                  Add Product
+                  Add Blank
                 </Button>
+              </div>
+
+              <div className="mb-4">
+                <ProductSearch onSelect={addProductFromCatalog} />
               </div>
 
               <div className="space-y-4">
