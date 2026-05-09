@@ -1,90 +1,55 @@
 ## Goal
+Make the entire app comfortable to use on phones (≤640px), while keeping desktop layout intact. PDF rendering is unaffected — it's already forced to 1024px width during export.
 
-Let sales reps search your WooCommerce product catalog from inside the quotation builder, attach products to a quote with name, description, price, and image auto-filled, and edit any field (including the image) per quote line.
+## Scope of changes (UI/presentation only)
 
-## How it will work
+### 1. Page shell & header (`QuotationForm.tsx`)
+- Reduce outer padding on mobile: `py-8` → `py-4 sm:py-8`, `px-4` stays.
+- Header row: stack title and Logout button on mobile (`flex-col sm:flex-row`, `gap-3`), shrink title `text-2xl sm:text-3xl`.
+- Tabs: keep 2 cols, but allow text wrap and shorten "Saved Quotations (Last 30 Days)" → "Saved" on mobile (use a hidden span pattern).
 
-```text
-WordPress (WooCommerce)            Lovable Cloud                 Quote Builder UI
-┌────────────────────────┐         ┌──────────────────┐          ┌────────────────────┐
-│ /wp-json/wc/v3/products│ ──sync─►│ products table   │ ──search►│ "Add product"      │
-│ name, desc, price, img │         │ (cached catalog) │          │ search box         │
-└────────────────────────┘         └──────────────────┘          │   ↓ select         │
-                                          ▲                      │ Line item (edit)   │
-                                          │                      │ name/desc/price/img│
-                                   "Sync now" button             └────────────────────┘
-                                   + daily cron
-```
+### 2. Form card
+- Card padding: `pt-6` stays; reduce inner section spacing `space-y-8` → `space-y-6 sm:space-y-8`.
+- Card header title `text-2xl` → `text-xl sm:text-2xl`.
+- All section headings keep responsive sizes; ensure inputs fill width (already do).
 
-1. We add a `products` cache table in Lovable Cloud that mirrors WooCommerce.
-2. An edge function `sync-woocommerce-products` pulls the full catalog from your WP site (paginated) and upserts into the cache.
-3. A daily cron + a manual "Sync products" button keep it fresh.
-4. In the quote builder, a search field queries the cached `products` table (fast, fuzzy on name/SKU).
-5. Picking a product appends a line item with name, description, price, image URL prefilled. All four fields are editable on that quote only — the catalog stays untouched.
-6. Editable image: rep can paste a new URL or upload a new image (stored in a Lovable Cloud storage bucket).
+### 3. Product line items (biggest mobile pain point)
+- Per-product card: header row already flex; keep.
+- The image upload row: stack file input above preview thumbnail on mobile (`flex-col sm:flex-row items-start`).
+- Confirm number inputs use `inputMode="decimal"` for better mobile keyboards (Quantity, Unit Price, Installation Cost).
+- ProductSearch results: ensure dropdown is scrollable and tap-friendly (verify in component, expand row hit area, truncate long names).
 
-## What you need to provide
+### 4. Action buttons (Save / Generate PDF / Cancel Edit)
+- Currently `flex gap-4 justify-end`. On mobile, stack full-width: `flex-col sm:flex-row gap-3 sm:gap-4 sm:justify-end`, buttons get `w-full sm:w-auto`.
 
-To talk to WooCommerce we need **read-only API credentials** from your WordPress site:
+### 5. Quotation preview card
+- Outer padding: `p-8 md:p-12` → `p-4 sm:p-8 md:p-12`.
+- Header logo/title block already stacks via `flex-col md:flex-row` — change breakpoint to `sm:` so it splits earlier and aligns the QUOTATION label right on tablets.
+- Products table: already wrapped in `overflow-x-auto`. Add `min-w-[640px]` on the `<table>` so columns don't crush; users scroll horizontally on phones. Reduce cell padding `p-3` → `p-2 sm:p-3`.
+- Price summary: `w-full md:w-96` is fine; keep.
+- Signature block and footer: ensure flex wrap on small screens.
 
-1. In WP Admin → **WooCommerce → Settings → Advanced → REST API → Add key**
-2. Permissions: **Read**
-3. Copy the **Consumer Key** and **Consumer Secret**
-4. Also share your store URL (e.g. `https://yourshop.com`)
+### 6. Saved Quotations list
+- Card row currently `flex justify-between items-start` with action buttons `ml-4`. On mobile, stack: details on top, action buttons row below (`flex-col sm:flex-row`, buttons `w-full sm:w-auto`, remove `ml-4` on mobile).
+- Inner details grid: `grid-cols-2` is OK but tight; switch to `grid-cols-1 sm:grid-cols-2`.
 
-We'll store these as three secrets in Lovable Cloud:
-- `WOOCOMMERCE_URL`
-- `WOOCOMMERCE_CONSUMER_KEY`
-- `WOOCOMMERCE_CONSUMER_SECRET`
+### 7. Auth page (`src/pages/Auth.tsx`)
+- Quick pass: ensure card max-width and padding work on small screens (likely already OK from shadcn defaults; verify and adjust if needed).
 
-Requirements on the WP side:
-- WooCommerce installed and REST API enabled (default)
-- HTTPS on the site (WooCommerce REST requires it for auth)
-- Products published with name, description, regular price, and a featured image
+### 8. Viewport meta
+- Verify `index.html` has `<meta name="viewport" content="width=device-width, initial-scale=1" />` (Vite template default). No change unless missing.
 
-## Build steps
+## Out of scope
+- No business-logic changes.
+- No changes to PDF generation pipeline (it forces 1024px desktop render, so the preview tweaks won't affect exported PDFs).
+- No new components or routes.
 
-1. **Database**
-   - New `products` table: `wc_id`, `name`, `description`, `short_description`, `price`, `sku`, `image_url`, `permalink`, `last_synced_at`.
-   - Indexes on `name` and `sku` for search.
-   - RLS: any authenticated user can read; only the sync function writes (service role).
-   - New storage bucket `quote-images` (public read) for rep-uploaded line-item images.
-   - Extend `quotations.products` JSON shape to optionally carry `wc_id` and `image_url` per line.
+## Files touched
+- `src/components/QuotationForm.tsx` (majority of edits)
+- `src/components/ProductSearch.tsx` (tap targets / dropdown sizing)
+- `src/pages/Auth.tsx` (minor, if needed)
+- `index.html` (verify viewport meta only)
 
-2. **Edge function: `sync-woocommerce-products`**
-   - Auth via Basic auth using consumer key/secret.
-   - Paginates `/wp-json/wc/v3/products?per_page=100` until done.
-   - Upserts by `wc_id`; soft-deletes products no longer returned.
-   - Returns count synced. Triggered by button or `pg_cron` daily.
-
-3. **Edge function: `search-products`** (optional thin wrapper) or do it client-side directly against the cache via Supabase client with `ilike`.
-
-4. **Quote builder UI changes (`QuotationForm.tsx`)**
-   - "Add product from catalog" combobox with debounced search (Command/Popover from shadcn).
-   - Result row shows thumbnail + name + price.
-   - On select → push a new line item with editable fields:
-     - Name (input)
-     - Description (textarea, prefilled from short_description)
-     - Price (number input)
-     - Image (preview + "replace" button → upload to `quote-images` bucket, or paste URL)
-   - "Sync products" button in a small admin area (visible to logged-in reps) calls the sync function and shows toast.
-   - Existing manual "blank line" entry stays as a fallback.
-
-5. **PDF generation**
-   - Include the per-line image (compressed) in the rendered PDF, keeping the existing 30 MB cap.
-
-## Out of scope (confirm if you want any of these)
-
-- Pulling product variations (size/color variants).
-- Pulling stock levels or category filters in the search.
-- Writing back to WooCommerce (this is read-only).
-- Multi-currency.
-
-## After approval
-
-I will, in order:
-1. Ask you to add the three WooCommerce secrets.
-2. Run the DB migration (products table, storage bucket, RLS).
-3. Create the sync edge function and run a first sync to verify.
-4. Update `QuotationForm.tsx` with the search + editable line items + image upload.
-5. Schedule the daily cron.
+## Verification
+- Switch preview to mobile (375px) and walk through: login → create quote → add catalog product → upload image → generate PDF preview → saved list.
+- Confirm desktop layout (≥1024px) is visually unchanged.
