@@ -1079,31 +1079,31 @@ const QuotationForm = () => {
                 <div>
                   <p className="font-bold text-foreground mb-3">LIPA NA MPESA</p>
                   <p className="text-muted-foreground mb-1">
-                    <span className="font-semibold">Business Number:</span> 400200
+                    <span className="font-semibold">Paybill:</span> 880100
                   </p>
                   <p className="text-muted-foreground">
-                    <span className="font-semibold">Account Number:</span> 889545
+                    <span className="font-semibold">Account Number:</span> 308388
                   </p>
                 </div>
                 <div>
                   <p className="font-bold text-foreground mb-3">BANKING DETAILS</p>
                   <p className="text-muted-foreground mb-1">
-                    <span className="font-semibold">Bank Name:</span> CO-OPERATIVE BANK OF KENYA
+                    <span className="font-semibold">Bank Name:</span> NCBA BANK KENYA PLC
                   </p>
                   <p className="text-muted-foreground mb-1">
-                    <span className="font-semibold">Account Name:</span> COLCAL MACHINERY AND EQUIPMENT COMPANY
+                    <span className="font-semibold">Account Name:</span> COLCAL EQUIPMENTS LIMITED
                   </p>
                   <p className="text-muted-foreground mb-1">
-                    <span className="font-semibold">Account Number:</span> 01101384733002
+                    <span className="font-semibold">Account Number:</span> 1011585472
                   </p>
                   <p className="text-muted-foreground mb-1">
-                    <span className="font-semibold">SWIFT Code:</span> KCOOKENA
+                    <span className="font-semibold">SWIFT Code:</span> CBAFKENX
                   </p>
                   <p className="text-muted-foreground mb-1">
-                    <span className="font-semibold">Bank Code:</span> 11000
+                    <span className="font-semibold">Bank Code:</span> 7
                   </p>
                   <p className="text-muted-foreground">
-                    <span className="font-semibold">Branch Code:</span> 11135 (Tom Mboya Branch)
+                    <span className="font-semibold">Branch Code:</span> 130 (Kitengela Branch)
                   </p>
                 </div>
               </div>
