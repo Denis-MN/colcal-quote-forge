@@ -426,26 +426,64 @@ const QuotationForm = () => {
       element.style.minWidth = originalMinWidth;
       element.style.maxWidth = originalMaxWidth;
 
-      const imgData = canvas.toDataURL("image/jpeg", 0.85);
       const pdf = new jsPDF("p", "mm", "a4");
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = pdfWidth;
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
 
-      let heightLeft = imgHeight;
-      let position = 0;
+      // Page height expressed in canvas pixels
+      const pageCanvasPx = canvas.width * (pdfHeight / pdfWidth);
+      const scale = 1.5;
+      const domPerPage = pageCanvasPx / scale;
 
-      // Add first page
-      pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
-      heightLeft -= pdfHeight;
+      // Collect safe break candidates (tops of sections, rows, list items, etc.)
+      // so the PDF cuts BETWEEN blocks instead of slicing through text.
+      const previewRect = element.getBoundingClientRect();
+      const candidates: number[] = [0, previewRect.height];
+      const collectBreaks = (el: Element, depth: number) => {
+        Array.from(el.children).forEach((child) => {
+          const top = child.getBoundingClientRect().top - previewRect.top;
+          if (top > 0) candidates.push(top);
+          if (depth < 3) collectBreaks(child, depth + 1);
+        });
+      };
+      collectBreaks(element, 0);
+      candidates.sort((a, b) => a - b);
 
-      // Add additional pages if content is longer than one page
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
-        heightLeft -= pdfHeight;
+      // Choose cut positions: for each page, use the last block boundary that
+      // still fits; if a single block is taller than a page, fall back to a
+      // hard cut (same behaviour as before for oversized blocks).
+      const pageBreaks: number[] = [];
+      let pageStart = 0;
+      while (pageStart + domPerPage < previewRect.height) {
+        const limit = pageStart + domPerPage;
+        let best = -1;
+        for (const c of candidates) {
+          if (c > pageStart + 10 && c <= limit) best = Math.max(best, c);
+        }
+        const cut = best > 0 ? best : limit;
+        pageBreaks.push(cut);
+        pageStart = cut;
+      }
+
+      // Render each page by cropping the full capture at the chosen boundaries
+      let prevCutPx = 0;
+      for (let i = 0; i <= pageBreaks.length; i++) {
+        const cutPx = i < pageBreaks.length ? pageBreaks[i] * scale : canvas.height;
+        const cropHeight = Math.min(cutPx, canvas.height) - prevCutPx;
+        if (cropHeight <= 0) continue;
+        const crop = document.createElement("canvas");
+        crop.width = canvas.width;
+        crop.height = cropHeight;
+        const ctx = crop.getContext("2d");
+        if (!ctx) continue;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, crop.width, crop.height);
+        ctx.drawImage(canvas, 0, prevCutPx, canvas.width, cropHeight, 0, 0, canvas.width, cropHeight);
+        const imgData = crop.toDataURL("image/jpeg", 0.85);
+        const imgHeight = (cropHeight * pdfWidth) / canvas.width;
+        if (i > 0) pdf.addPage();
+        pdf.addImage(imgData, "JPEG", 0, 0, pdfWidth, imgHeight, undefined, "FAST");
+        prevCutPx += cropHeight;
       }
 
       pdf.save(`Colcal_Quotation_${quotationNumber}.pdf`);
