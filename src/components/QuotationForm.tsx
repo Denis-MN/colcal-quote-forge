@@ -885,7 +885,7 @@ const QuotationForm = () => {
               <div className="md:col-span-3">
                 <p className="font-semibold text-foreground">Address:</p>
                 <p className="text-muted-foreground">
-                  Ruai, Kangundo rd, Opposite Shell Petrol Station, Nairobi, Kenya
+                  Ruai, Kangundo rd, Opposite Shell Petrol Station
                 </p>
               </div>
             </div>
