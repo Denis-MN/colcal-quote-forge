@@ -50,6 +50,7 @@ interface SavedQuotation {
   sales_rep_info: SalesRepInfo;
   project_title: string;
   intro_text: string;
+  project_details: string;
   products: Product[];
   installation_cost: number;
   include_tax: boolean;
@@ -89,6 +90,7 @@ const QuotationForm = () => {
   const [introText, setIntroText] = useState(
     "Thank you for choosing Colcal Machinery. Below is our quotation for the requested system. We guarantee reliable equipment, professional installation, and full after-sales support across Kenya and East Africa."
   );
+  const [projectDetails, setProjectDetails] = useState("");
 
   const [products, setProducts] = useState<Product[]>([
     {
