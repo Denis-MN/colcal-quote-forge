@@ -185,6 +185,7 @@ const QuotationForm = () => {
       sales_rep_info: salesRepInfo as any,
       project_title: projectTitle,
       intro_text: introText,
+      project_details: projectDetails,
       products: products as any,
       installation_cost: installationCost,
       include_tax: includeTax,
@@ -241,6 +242,7 @@ const QuotationForm = () => {
     setSalesRepInfo(quotation.sales_rep_info);
     setProjectTitle(quotation.project_title);
     setIntroText(quotation.intro_text);
+    setProjectDetails(quotation.project_details || "");
     setProducts(quotation.products);
     setInstallationCost(Number(quotation.installation_cost));
     setIncludeTax(quotation.include_tax);
@@ -278,6 +280,7 @@ const QuotationForm = () => {
     setCustomerInfo({ name: "", company: "", location: "", phone: "", email: "" });
     setSalesRepInfo({ name: "", position: "Sales Engineer", phone: "", email: "", signature: "" });
     setProjectTitle("");
+    setProjectDetails("");
     setIntroText("Thank you for choosing Colcal Machinery. Below is our quotation for the requested system. We guarantee reliable equipment, professional installation, and full after-sales support across Kenya and East Africa.");
     setProducts([{ id: "1", name: "", description: "", image: "", quantity: 1, unitPrice: 0 }]);
     setInstallationCost(0);
@@ -592,6 +595,16 @@ const QuotationForm = () => {
                     value={introText}
                     onChange={(e) => setIntroText(e.target.value)}
                     rows={3}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="projectDetails">Technical Specifications / Project Overview</Label>
+                  <Textarea
+                    id="projectDetails"
+                    value={projectDetails}
+                    onChange={(e) => setProjectDetails(e.target.value)}
+                    placeholder="e.g., System components, panel count, inverter capacity, battery backup, site assessment notes..."
+                    rows={5}
                   />
                 </div>
               </div>
@@ -942,6 +955,14 @@ const QuotationForm = () => {
             <div className="mb-8 p-4 bg-primary/5 rounded-lg">
               <p className="text-sm text-foreground leading-relaxed">{introText}</p>
             </div>
+
+            {/* Technical Specifications / Project Overview */}
+            {projectDetails && (
+              <div className="mb-8">
+                <h3 className="text-lg font-bold text-primary mb-3">Technical Specifications & Project Overview</h3>
+                <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{projectDetails}</p>
+              </div>
+            )}
 
             {/* Products Table */}
             <div className="mb-8 -mx-4 sm:mx-0 overflow-x-auto">
