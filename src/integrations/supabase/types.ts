@@ -72,6 +72,7 @@ export type Database = {
           installation_cost: number
           intro_text: string
           products: Json
+          project_details: string
           project_title: string
           quotation_number: string
           sales_rep_info: Json
@@ -87,6 +88,7 @@ export type Database = {
           installation_cost?: number
           intro_text?: string
           products?: Json
+          project_details?: string
           project_title?: string
           quotation_number: string
           sales_rep_info?: Json
@@ -102,6 +104,7 @@ export type Database = {
           installation_cost?: number
           intro_text?: string
           products?: Json
+          project_details?: string
           project_title?: string
           quotation_number?: string
           sales_rep_info?: Json
