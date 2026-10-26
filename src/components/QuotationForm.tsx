@@ -12,7 +12,7 @@ import { Plus, Trash2, FileDown, Upload, LogOut, Edit, Save } from "lucide-react
 import { useToast } from "@/hooks/use-toast";
 import colcalLogo from "@/assets/colcal-logo.webp";
 import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
+import autoTable from "jspdf-autotable";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import ProductSearch, { type CatalogProduct } from "./ProductSearch";
@@ -392,120 +392,465 @@ const QuotationForm = () => {
 
   const generatePDF = async () => {
     try {
-      const element = document.getElementById("quotation-preview");
-      if (!element) return;
-
       toast({
         title: "Generating PDF...",
         description: "Please wait while we prepare your quotation.",
       });
 
-      // Store original styles
-      const originalWidth = element.style.width;
-      const originalMinWidth = element.style.minWidth;
-      const originalMaxWidth = element.style.maxWidth;
-
-      // Set fixed width for PDF generation to ensure proper rendering on mobile
-      element.style.width = "1024px";
-      element.style.minWidth = "1024px";
-      element.style.maxWidth = "1024px";
-
-      // Wait for layout to stabilize
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      const canvas = await html2canvas(element, {
-        scale: 1.5,
-        useCORS: true,
-        logging: false,
-        allowTaint: true,
-        width: 1024,
-      });
-
-      // Restore original styles
-      element.style.width = originalWidth;
-      element.style.minWidth = originalMinWidth;
-      element.style.maxWidth = originalMaxWidth;
-
-      const pdf = new jsPDF("p", "mm", "a4");
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-
-      // Page height expressed in canvas pixels
-      const pageCanvasPx = canvas.width * (pdfHeight / pdfWidth);
-      const scale = 1.5;
-      const domPerPage = pageCanvasPx / scale;
-
-      // Collect safe break candidates (tops of sections, rows, list items, etc.)
-      // so the PDF cuts BETWEEN blocks instead of slicing through text.
-      const previewRect = element.getBoundingClientRect();
-      const candidates: number[] = [0, previewRect.height];
-      const collectBreaks = (el: Element, depth: number) => {
-        Array.from(el.children).forEach((child) => {
-          const top = child.getBoundingClientRect().top - previewRect.top;
-          if (top > 0) candidates.push(top);
-          if (depth < 3) collectBreaks(child, depth + 1);
+      // jsPDF cannot embed WEBP and needs intrinsic image sizes, so every image
+      // (logo, product photos, signature) is redrawn through a canvas as a
+      // downscaled JPEG first — keeps the PDF small and embed-safe.
+      const normalizeImage = (src: string) =>
+        new Promise<{ dataUrl: string; width: number; height: number } | null>((resolve) => {
+          if (!src) {
+            resolve(null);
+            return;
+          }
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.onload = () => {
+            try {
+              const maxSide = 600;
+              const ratio = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+              const canvas = document.createElement("canvas");
+              canvas.width = Math.max(1, Math.round(img.naturalWidth * ratio));
+              canvas.height = Math.max(1, Math.round(img.naturalHeight * ratio));
+              const ctx = canvas.getContext("2d");
+              if (!ctx) {
+                resolve(null);
+                return;
+              }
+              ctx.fillStyle = "#ffffff";
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+              resolve({
+                dataUrl: canvas.toDataURL("image/jpeg", 0.85),
+                width: canvas.width,
+                height: canvas.height,
+              });
+            } catch {
+              resolve(null);
+            }
+          };
+          img.onerror = () => resolve(null);
+          img.src = src;
         });
-      };
-      collectBreaks(element, 0);
-      candidates.sort((a, b) => a - b);
 
-      // Choose cut positions: for each page, use the last block boundary that
-      // still fits; if a single block is taller than a page, fall back to a
-      // hard cut (same behaviour as before for oversized blocks).
-      const pageBreaks: number[] = [];
-      let pageStart = 0;
-      while (pageStart + domPerPage < previewRect.height) {
-        const limit = pageStart + domPerPage;
-        let best = -1;
-        for (const c of candidates) {
-          if (c > pageStart + 10 && c <= limit) best = Math.max(best, c);
+      const [logoImg, signatureImg, ...productImgs] = await Promise.all([
+        normalizeImage(colcalLogo),
+        normalizeImage(salesRepInfo.signature || ""),
+        ...products.map((p) => normalizeImage(p.image || "")),
+      ]);
+
+      const doc = new jsPDF({ unit: "mm", format: "a4", compress: true });
+      const PRIMARY: [number, number, number] = [28, 110, 141];
+      const SECONDARY: [number, number, number] = [170, 203, 77];
+      const TEXT: [number, number, number] = [36, 41, 45];
+      const MUTED: [number, number, number] = [105, 112, 119];
+      const BORDER: [number, number, number] = [214, 222, 231];
+      const LIGHT: [number, number, number] = [240, 246, 248];
+
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+      const M = { left: 14, right: 14, top: 16, bottom: 24 };
+      const contentW = pageW - M.left - M.right;
+      const footerTop = pageH - 18;
+      let y = M.top;
+
+      const ensureSpace = (needed: number) => {
+        if (y + needed > footerTop) {
+          doc.addPage();
+          y = M.top;
         }
-        const cut = best > 0 ? best : limit;
-        pageBreaks.push(cut);
-        pageStart = cut;
+      };
+
+      const setFont = (
+        style: "normal" | "bold" | "italic",
+        size: number,
+        color: [number, number, number]
+      ) => {
+        doc.setFont("helvetica", style);
+        doc.setFontSize(size);
+        doc.setTextColor(...color);
+      };
+
+      const sectionTitle = (text: string) => {
+        ensureSpace(12);
+        setFont("bold", 12, PRIMARY);
+        doc.text(text, M.left, y + 4);
+        y += 9;
+      };
+
+      // Bold label + wrapped normal value on one line; returns height used (mm).
+      const kv = (x: number, baseY: number, label: string, value: string, width: number): number => {
+        setFont("bold", 9, TEXT);
+        doc.text(label, x, baseY);
+        const lw = doc.getTextWidth(label);
+        setFont("normal", 9, MUTED);
+        const lines = doc.splitTextToSize(value || "-", Math.max(10, width - lw - 2)) as string[];
+        lines.forEach((ln, i) => doc.text(ln, x + lw + 1.5, baseY + i * 4.2));
+        return lines.length * 4.2;
+      };
+
+      const paragraph = (
+        text: string,
+        opts?: { width?: number; x?: number; size?: number; lineHeight?: number; color?: [number, number, number] }
+      ) => {
+        const size = opts?.size ?? 9;
+        const lh = opts?.lineHeight ?? 4.4;
+        const x = opts?.x ?? M.left;
+        const width = opts?.width ?? contentW;
+        setFont("normal", size, opts?.color ?? TEXT);
+        const lines = doc.splitTextToSize(text, width) as string[];
+        ensureSpace(lines.length * lh + 4);
+        lines.forEach((ln, i) => doc.text(ln, x, y + 3.5 + i * lh));
+        y += lines.length * lh + 2;
+      };
+
+      const drawCheck = (x: number, baseY: number) => {
+        doc.setDrawColor(...SECONDARY);
+        doc.setLineWidth(0.7);
+        doc.line(x, baseY - 0.6, x + 1.1, baseY + 0.8);
+        doc.line(x + 1.1, baseY + 0.8, x + 3.2, baseY - 2);
+      };
+
+      // ---------- Page 1 header ----------
+      setFont("bold", 20, PRIMARY);
+      doc.text("QUOTATION", pageW - M.right, y + 9, { align: "right" });
+      setFont("normal", 9, MUTED);
+      doc.text(`No: ${quotationNumber}`, pageW - M.right, y + 15, { align: "right" });
+      doc.text(`Date: ${date}`, pageW - M.right, y + 19.5, { align: "right" });
+      if (logoImg) {
+        const h = 17;
+        const w = h * (logoImg.width / logoImg.height);
+        doc.addImage(logoImg.dataUrl, "JPEG", M.left, y, w, h);
+      }
+      y += 21;
+      setFont("normal", 8, MUTED);
+      doc.text("Powering Homes, Businesses & Industries Across East Africa", M.left, y + 2);
+      y += 6;
+      doc.setDrawColor(...PRIMARY);
+      doc.setLineWidth(0.6);
+      doc.line(M.left, y, pageW - M.right, y);
+      y += 7;
+
+      // ---------- Company contact block ----------
+      const colW3 = contentW / 3;
+      ensureSpace(26);
+      doc.setFillColor(...LIGHT);
+      doc.roundedRect(M.left, y, contentW, 21, 1.5, 1.5, "F");
+      kv(M.left + 4, y + 6, "Email:", "sales@colcalmachinery.co.ke", colW3 - 8);
+      kv(M.left + colW3 + 2, y + 6, "Phone:", "0701 652100", colW3 - 8);
+      kv(M.left + 2 * colW3, y + 6, "Website:", "www.colcalmachinery.co.ke", colW3 - 6);
+      kv(M.left + 4, y + 14, "Address:", "Ruai, Kangundo rd, Opposite Shell Petrol Station", contentW - 10);
+      y += 21 + 7;
+
+      // ---------- Bill To ----------
+      sectionTitle("Bill To:");
+      const halfW = contentW / 2;
+      const billPairs: Array<[string, string]> = [
+        ["Name:", customerInfo.name],
+        ["Company:", customerInfo.company],
+        ["Location:", customerInfo.location],
+        ["Phone:", customerInfo.phone],
+      ];
+      for (let i = 0; i < billPairs.length; i += 2) {
+        ensureSpace(8);
+        const h1 = kv(M.left, y + 4, billPairs[i][0], billPairs[i][1], halfW - 8);
+        const h2 = billPairs[i + 1]
+          ? kv(M.left + halfW, y + 4, billPairs[i + 1][0], billPairs[i + 1][1], halfW - 8)
+          : 0;
+        y += Math.max(h1, h2, 5) + 2;
+      }
+      ensureSpace(8);
+      const emailH = kv(M.left, y + 4, "Email:", customerInfo.email, contentW - 8);
+      y += Math.max(emailH, 5) + 5;
+
+      // ---------- Project title ----------
+      if (projectTitle) {
+        sectionTitle(`Quotation for ${projectTitle}`);
       }
 
-      // Render each page by cropping the full capture at the chosen boundaries
-      let prevCutPx = 0;
-      for (let i = 0; i <= pageBreaks.length; i++) {
-        const cutPx = i < pageBreaks.length ? pageBreaks[i] * scale : canvas.height;
-        const cropHeight = Math.min(cutPx, canvas.height) - prevCutPx;
-        if (cropHeight <= 0) continue;
-        const crop = document.createElement("canvas");
-        crop.width = canvas.width;
-        crop.height = cropHeight;
-        const ctx = crop.getContext("2d");
-        if (!ctx) continue;
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, crop.width, crop.height);
-        ctx.drawImage(canvas, 0, prevCutPx, canvas.width, cropHeight, 0, 0, canvas.width, cropHeight);
-        const imgData = crop.toDataURL("image/jpeg", 0.85);
-        const imgHeight = (cropHeight * pdfWidth) / canvas.width;
-        if (i > 0) pdf.addPage();
-        pdf.addImage(imgData, "JPEG", 0, 0, pdfWidth, imgHeight, undefined, "FAST");
-        prevCutPx += cropHeight;
+      // ---------- Introduction ----------
+      {
+        setFont("normal", 9, TEXT);
+        const lines = doc.splitTextToSize(introText, contentW - 10) as string[];
+        const boxH = lines.length * 4.4 + 9;
+        ensureSpace(boxH + 2);
+        doc.setFillColor(...LIGHT);
+        doc.roundedRect(M.left, y, contentW, boxH, 1.5, 1.5, "F");
+        lines.forEach((ln, i) => doc.text(ln, M.left + 5, y + 6.5 + i * 4.4));
+        y += boxH + 6;
       }
 
-      pdf.save(`Colcal_Quotation_${quotationNumber}.pdf`);
+      // ---------- Technical specifications / project overview ----------
+      if (projectDetails) {
+        sectionTitle("Technical Specifications & Project Overview");
+        projectDetails.split("\n").forEach((line) => {
+          if (!line.trim()) {
+            y += 2;
+            return;
+          }
+          paragraph(line);
+        });
+        y += 2;
+      }
+
+      // ---------- Products table (header repeats on every page) ----------
+      ensureSpace(34);
+      autoTable(doc, {
+        startY: y,
+        margin: { left: M.left, right: M.right, top: M.top, bottom: M.bottom },
+        head: [["", "#", "Product", "Description", "Qty", "Unit Price (KES)", "Total (KES)"]],
+        body: products.map((p, i) => [
+          "",
+          String(i + 1),
+          p.name || "[Product Name]",
+          p.description || "-",
+          String(p.quantity),
+          formatCurrency(p.unitPrice),
+          formatCurrency(p.quantity * p.unitPrice),
+        ]),
+        theme: "grid",
+        styles: {
+          font: "helvetica",
+          fontSize: 8.5,
+          cellPadding: 2,
+          textColor: TEXT,
+          lineColor: BORDER,
+          lineWidth: 0.15,
+          valign: "middle",
+        },
+        headStyles: { fillColor: PRIMARY, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8.5 },
+        alternateRowStyles: { fillColor: [248, 250, 251] },
+        columnStyles: {
+          0: { cellWidth: 16 },
+          1: { cellWidth: 8, halign: "center" },
+          2: { cellWidth: 46, fontStyle: "bold" },
+          3: { cellWidth: 56, textColor: MUTED, fontSize: 8 },
+          4: { cellWidth: 12, halign: "center" },
+          5: { cellWidth: 22, halign: "right" },
+          6: { cellWidth: 22, halign: "right" },
+        },
+        rowPageBreak: "avoid",
+        didParseCell: (data: any) => {
+          if (data.section === "body" && productImgs[data.row.index]) {
+            data.cell.styles.minCellHeight = 17;
+          }
+        },
+        didDrawCell: (data: any) => {
+          const img = productImgs[data.row.index];
+          if (data.section === "body" && data.column.index === 0 && img) {
+            const maxH = 14;
+            const maxW = 12;
+            const aspect = img.width / img.height;
+            let w = maxH * aspect;
+            let h = maxH;
+            if (w > maxW) {
+              w = maxW;
+              h = maxW / aspect;
+            }
+            doc.addImage(
+              img.dataUrl,
+              "JPEG",
+              data.cell.x + (data.cell.width - w) / 2,
+              data.cell.y + (data.cell.height - h) / 2,
+              w,
+              h
+            );
+          }
+        },
+      });
+      y = (doc as any).lastAutoTable.finalY + 8;
+
+      // ---------- Price summary ----------
+      const sumW = 85;
+      const sumX = pageW - M.right - sumW;
+      const summaryRows: Array<[string, string]> = [
+        ["Subtotal:", `KES ${formatCurrency(calculateSubtotal())}`],
+        ["Installation:", `KES ${formatCurrency(installationCost)}`],
+      ];
+      if (includeTax) summaryRows.push(["VAT (16%):", `KES ${formatCurrency(calculateVAT())}`]);
+      const summaryH = summaryRows.length * 7 + 13;
+      ensureSpace(summaryH + 2);
+      summaryRows.forEach(([label, val], i) => {
+        const baseY = y + 5 + i * 7;
+        doc.setDrawColor(...BORDER);
+        doc.setLineWidth(0.2);
+        doc.line(sumX, baseY + 2.5, pageW - M.right, baseY + 2.5);
+        setFont("normal", 9, MUTED);
+        doc.text(label, sumX, baseY);
+        setFont("bold", 9, TEXT);
+        doc.text(val, pageW - M.right, baseY, { align: "right" });
+      });
+      y += summaryRows.length * 7 + 2;
+      doc.setFillColor(232, 242, 245);
+      doc.rect(sumX, y, sumW, 11, "F");
+      setFont("bold", 11, PRIMARY);
+      doc.text("Total Payable:", sumX + 3, y + 7.2);
+      setFont("bold", 12, PRIMARY);
+      doc.text(`KES ${formatCurrency(calculateTotal())}`, pageW - M.right - 3, y + 7.2, {
+        align: "right",
+      });
+      y += 11 + 8;
+
+      // ---------- Why Choose block ----------
+      {
+        const bullets = [
+          "Trusted brands like Perkins, Cummins, Jinko, SRNE, and Premier",
+          "Expert installation and training",
+          "5-year warranty on solar systems",
+          "24/7 technical support and spare parts availability",
+        ];
+        const proposalText =
+          "Colcal Machinery specializes in reliable power and machinery solutions across Kenya and East Africa. We offer complete installation, testing, and commissioning services handled by certified technicians. Every project is delivered on time, professionally executed, and backed by after-sales support.";
+        const bulletColW = (contentW - 16) / 2;
+        setFont("normal", 9, TEXT);
+        const bulletLineCounts = bullets.map(
+          (b) => (doc.splitTextToSize(b, bulletColW - 7) as string[]).length
+        );
+        const bulletRows = [0, 2].map((start) =>
+          Math.max(bulletLineCounts[start], bulletLineCounts[start + 1] ?? 0)
+        );
+        const paraLineCount = (doc.splitTextToSize(proposalText, contentW - 12) as string[]).length;
+        const blockH =
+          12 + paraLineCount * 4.4 + 4 + bulletRows.reduce((s, r) => s + r * 4.4 + 3, 0) + 4;
+        ensureSpace(blockH + 2);
+        doc.setFillColor(244, 248, 245);
+        doc.roundedRect(M.left, y, contentW, blockH, 1.5, 1.5, "F");
+        setFont("bold", 12, PRIMARY);
+        doc.text("Why Choose Colcal Machinery?", M.left + 6, y + 7.5);
+        setFont("normal", 9, TEXT);
+        const paraLines = doc.splitTextToSize(proposalText, contentW - 12) as string[];
+        paraLines.forEach((ln, i) => doc.text(ln, M.left + 6, y + 14 + i * 4.4));
+        let by = y + 14 + paraLineCount * 4.4 + 4;
+        for (let r = 0; r < 2; r++) {
+          for (let c = 0; c < 2; c++) {
+            const idx = r * 2 + c;
+            if (idx >= bullets.length) break;
+            const bx = M.left + 6 + c * (bulletColW + 8);
+            drawCheck(bx, by + 1);
+            const lines = doc.splitTextToSize(bullets[idx], bulletColW - 7) as string[];
+            lines.forEach((ln, i) => doc.text(ln, bx + 5.5, by + i * 4.4));
+          }
+          by += bulletRows[r] * 4.4 + 3;
+        }
+        y += blockH + 7;
+      }
+
+      // ---------- Payment details ----------
+      {
+        sectionTitle("Payment Details");
+        const leftLines: Array<[string, string]> = [
+          ["Paybill:", "880100"],
+          ["Account Number:", "308388"],
+        ];
+        const rightLines: Array<[string, string]> = [
+          ["Bank Name:", "NCBA BANK KENYA PLC"],
+          ["Account Name:", "COLCAL EQUIPMENTS LIMITED"],
+          ["Account Number:", "1011585472"],
+          ["SWIFT Code:", "CBAFKENX"],
+          ["Bank Code:", "7"],
+          ["Branch Code:", "130 (Kitengela Branch)"],
+        ];
+        const colWp = (contentW - 20) / 2;
+        const boxH = 10 + 6 * 4.6 + 6;
+        ensureSpace(boxH + 2);
+        doc.setFillColor(...LIGHT);
+        doc.roundedRect(M.left, y, contentW, boxH, 1.5, 1.5, "F");
+        setFont("bold", 10, TEXT);
+        doc.text("LIPA NA MPESA", M.left + 6, y + 6.5);
+        doc.text("BANKING DETAILS", M.left + 10 + colWp, y + 6.5);
+        let py = y + 13;
+        leftLines.forEach(([l, v]) => {
+          kv(M.left + 6, py, l, v, colWp);
+          py += 4.6;
+        });
+        let pry = y + 13;
+        rightLines.forEach(([l, v]) => {
+          kv(M.left + 10 + colWp, pry, l, v, colWp);
+          pry += 4.6;
+        });
+        y += boxH + 7;
+      }
+
+      // ---------- Prepared by / signature ----------
+      sectionTitle("Quotation Prepared By:");
+      const repPairs: Array<[string, string]> = [
+        ["Name:", salesRepInfo.name],
+        ["Position:", salesRepInfo.position],
+        ["Phone:", salesRepInfo.phone],
+        ["Email:", salesRepInfo.email],
+      ];
+      for (let i = 0; i < repPairs.length; i += 2) {
+        ensureSpace(8);
+        const h1 = kv(M.left, y + 4, repPairs[i][0], repPairs[i][1], halfW - 8);
+        const h2 = repPairs[i + 1]
+          ? kv(M.left + halfW, y + 4, repPairs[i + 1][0], repPairs[i + 1][1], halfW - 8)
+          : 0;
+        y += Math.max(h1, h2, 5) + 2;
+      }
+      y += 3;
+      ensureSpace(30);
+      setFont("normal", 8, MUTED);
+      doc.text("Authorized Signature:", M.left, y + 3);
+      y += 6;
+      if (signatureImg) {
+        const maxH = 15;
+        const maxW = 60;
+        const aspect = signatureImg.width / signatureImg.height;
+        let w = maxH * aspect;
+        let h = maxH;
+        if (w > maxW) {
+          w = maxW;
+          h = maxW / aspect;
+        }
+        doc.addImage(signatureImg.dataUrl, "JPEG", M.left, y, w, h);
+        y += h + 2;
+      }
+      doc.setDrawColor(...BORDER);
+      doc.setLineWidth(0.3);
+      doc.line(M.left, y + 4, M.left + 60, y + 4);
+      setFont("normal", 8, MUTED);
+      doc.text(`Date: ${date}`, M.left, y + 9);
+      y += 13;
+
+      // ---------- Footer on every page (with page numbers) ----------
+      const totalPages = doc.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setDrawColor(...PRIMARY);
+        doc.setLineWidth(0.6);
+        doc.line(M.left, footerTop, pageW - M.right, footerTop);
+        setFont("bold", 8.5, PRIMARY);
+        doc.text(
+          "For reliable solar, generator, and machinery solutions — trust Colcal machinery",
+          M.left,
+          footerTop + 4.5
+        );
+        setFont("normal", 8, MUTED);
+        doc.text(`Page ${i} of ${totalPages}`, pageW - M.right, footerTop + 4.5, { align: "right" });
+        setFont("normal", 7.5, MUTED);
+        doc.text(
+          "Delivering power across Kenya & East Africa  |  www.colcalmachinery.co.ke  |  sales@colcalmachinery.co.ke  |  Tel: 0701 652100",
+          M.left,
+          footerTop + 8.5
+        );
+      }
+
+      doc.save(`Colcal_Quotation_${quotationNumber}.pdf`);
 
       toast({
         title: "PDF Generated!",
         description: "Your quotation has been downloaded successfully.",
       });
     } catch (error) {
+      console.error("PDF generation failed:", error);
       toast({
         title: "Error",
         description: "Failed to generate PDF. Please try again.",
         variant: "destructive",
       });
-      
-      // Ensure styles are restored even if there's an error
-      const element = document.getElementById("quotation-preview");
-      if (element) {
-        element.style.width = "";
-        element.style.minWidth = "";
-        element.style.maxWidth = "";
-      }
     }
   };
 
